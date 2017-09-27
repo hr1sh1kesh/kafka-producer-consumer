@@ -5,12 +5,16 @@ import static org.junit.Assert.assertThat;
 import static org.springframework.kafka.test.assertj.KafkaConditions.key;
 import static org.springframework.kafka.test.hamcrest.KafkaMatchers.hasValue;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
@@ -19,6 +23,7 @@ import org.junit.runner.RunWith;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.listener.KafkaMessageListenerContainer;
@@ -37,8 +42,17 @@ public class SpringKafkaSenderTest {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SpringKafkaSenderTest.class);
 
-  private static String SENDER_TOPIC = "sender.t";
+ private static String SENDER_TOPIC = "sender.t";
 
+//  @Value("${kafka.topic}")
+//  private static String SENDER_TOPIC;
+  
+  @Value("${kafka.bootstrap-servers}")
+  private String bootstrapServers;
+  
+  @Value("${kafka.consumer.group-id}")
+  private String groupId;
+  
   @Autowired
   private Sender sender;
 
@@ -51,24 +65,17 @@ public class SpringKafkaSenderTest {
 
   @Before
   public void setUp() throws Exception {
-    // set up the Kafka consumer properties
-    Map<String, Object> consumerProperties =
-        KafkaTestUtils.consumerProps("sender", "false", embeddedKafka);
+	  
+	  Map<String, Object> consumerProps =
+		        KafkaTestUtils.consumerProps("sender", "false", embeddedKafka);
 
-    // create a Kafka consumer factory
     DefaultKafkaConsumerFactory<String, String> consumerFactory =
-        new DefaultKafkaConsumerFactory<String, String>(consumerProperties);
+        new DefaultKafkaConsumerFactory<String, String>(consumerProps);
 
-    // set the topic that needs to be consumed
     ContainerProperties containerProperties = new ContainerProperties(SENDER_TOPIC);
-
-    // create a Kafka MessageListenerContainer
     container = new KafkaMessageListenerContainer<>(consumerFactory, containerProperties);
-
-    // create a thread safe queue to store the received message
     records = new LinkedBlockingQueue<>();
 
-    // setup a Kafka message listener
     container.setupMessageListener(new MessageListener<String, String>() {
       @Override
       public void onMessage(ConsumerRecord<String, String> record) {
@@ -77,30 +84,22 @@ public class SpringKafkaSenderTest {
       }
     });
 
-    // start the container and underlying message listener
     container.start();
-
-    // wait until the container has the required number of assigned partitions
     ContainerTestUtils.waitForAssignment(container, embeddedKafka.getPartitionsPerTopic());
   }
 
   @After
   public void tearDown() {
-    // stop the container
     container.stop();
   }
 
   @Test
   public void testSend() throws InterruptedException {
-    // send the message
     String greeting = "Hello Spring Kafka Sender!";
     sender.send(SENDER_TOPIC, greeting);
 
-    // check that the message was received
     ConsumerRecord<String, String> received = records.poll(10, TimeUnit.SECONDS);
-    // Hamcrest Matchers to check the value
     assertThat(received, hasValue(greeting));
-    // AssertJ Condition to check the key
     assertThat(received).has(key(null));
   }
 }

@@ -46,20 +46,15 @@ public class SpringKafkaReceiverTest {
 
   @Before
   public void setUp() throws Exception {
-    // set up the Kafka producer properties
     Map<String, Object> senderProperties =
         KafkaTestUtils.senderProps(embeddedKafka.getBrokersAsString());
 
-    // create a Kafka producer factory
     ProducerFactory<String, String> producerFactory =
         new DefaultKafkaProducerFactory<String, String>(senderProperties);
 
-    // create a Kafka template
     template = new KafkaTemplate<>(producerFactory);
-    // set the default topic to send to
     template.setDefaultTopic(RECEIVER_TOPIC);
 
-    // wait until the partitions are assigned
     for (MessageListenerContainer messageListenerContainer : kafkaListenerEndpointRegistry
         .getListenerContainers()) {
       ContainerTestUtils.waitForAssignment(messageListenerContainer,
@@ -69,13 +64,11 @@ public class SpringKafkaReceiverTest {
 
   @Test
   public void testReceive() throws Exception {
-    // send the message
     String greeting = "Hello Spring Kafka Receiver!";
     template.sendDefault(greeting);
     LOGGER.debug("test-sender sent message='{}'", greeting);
 
     receiver.getLatch().await(10000, TimeUnit.MILLISECONDS);
-    // check that the message was received
     assertThat(receiver.getLatch().getCount()).isEqualTo(0);
   }
 }
